@@ -188,6 +188,8 @@
       query
     )}`;
 
+    console.log("Session id:", sessionId);
+
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -195,6 +197,8 @@
         "Content-Type": "application/json",
       },
     });
+
+    console.log("--------Tooling APi Resposne: ", response);
 
     if (!response.ok) {
       throw new Error("Metadata fetch failed");
@@ -251,8 +255,9 @@
   }
 
   async function callPerplexityToAnswerUserPrompt(userText) {
-    const url = "https://api.perplexity.ai/chat/completions";
-    const apiKey = "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"; // Replace with your actual key
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    // const apiKey = "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"; // Replace with your actual key
 
     const bodytext = `### 1. Question
 ${userText}
@@ -261,9 +266,9 @@ ${userText}
 - Carefully analyze the provided Salesforce Flow XML.
 - Identify the component or components most relevant to the user's question.
 - Use the **component label** (not the component name) when referring to components in the response.
-- Each component label **must be wrapped in HTML bold tags** like this: <strong>Component Label</strong>.
 - If multiple components are relevant, include each of their labels — all must be wrapped in <strong> tags.
 - Use the name of the **triggering object** (from the <object> tag); do not use the word "Record".
+- Each component label **must be wrapped in HTML bold tags** like this: <strong>Component Label</strong>.
 - Keep the explanation **short, clear, and no more than 3 lines**.
 - Only answer what the user asks — do not add unrelated context or additional explanations.
 
@@ -278,11 +283,14 @@ ${xml}
 
     console.log("xml in chat: ", xml);
     const body = {
-      model: "sonar-pro",
-      messages: [
+      contents: [
         {
           role: "user",
-          content: JSON.stringify(bodytext),
+          parts: [
+            {
+              text: JSON.stringify(bodytext),
+            },
+          ],
         },
       ],
     };
@@ -294,7 +302,7 @@ ${xml}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "X-goog-api-key": "AIzaSyCvy9qo6DJhF5Ry9ecNGPjAuywh3ZyeGZE",
         },
         body: JSON.stringify(body),
       });
@@ -304,19 +312,31 @@ ${xml}
       }
 
       const data = await response.json();
-      const reply =
-        data.choices?.[0]?.message?.content || "No response from AI.";
+      console.log("Full Gemini API response:", JSON.stringify(response));
 
-      console.log("reply : ", reply);
+      // Step 1: Get first candidate safely
+      const candidate = data?.candidates?.[0];
+      if (!candidate) throw new Error("No candidates in Gemini response");
 
-      let parsed;
+      // Step 2: Extract text from all parts (in case there are multiple)
+      const parts = candidate.content?.parts || [];
+      const combinedText = parts
+        .map((p) => p.text)
+        .join("\n")
+        .trim();
+
+      if (!combinedText) throw new Error("No content returned from Gemini");
+
+      // Step 3: Remove Markdown fences (```json ... ```)
+      const cleaned = combinedText.replace(/```json\n?|\n?```/g, "");
+      console.log("cleaned : ", cleaned);
+
       try {
         responseLoaded();
-        parsed = JSON.parse(reply);
-        console.log("user prompt response", parsed);
+        const finalChat = JSON.parse(cleaned);
         chatHistory.push({
           sender: "bot",
-          text: parsed.response,
+          text: finalChat.response,
           messageType: "response",
         });
 
@@ -337,15 +357,18 @@ ${xml}
   }
 
   async function callPerplexityApiforSummaries() {
-    const url = "https://api.perplexity.ai/chat/completions";
-    const apiKey = "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"; // Replace with your actual key
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    // const apiKey = "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"; // Replace with your actual key
 
     const body = {
-      model: "sonar-pro",
-      messages: [
+      contents: [
         {
-          role: "user",
-          content: `Here is a Salesforce Flow XML:\n${xml}\n\nBased on this, provide me a JSON output in the following format:\n{\n  "name": "flow name",\n  "version": "version of flow",\n  "isActive": "is that version active",\n  "short description": "...",\n  "long description": "...",\n  "possible questions": "...",\n  "questions": []\n}`,
+          parts: [
+            {
+              text: `Here is a Salesforce Flow XML:\n${xml}\n\nBased on this, provide me a JSON output in the following format:\n{\n  "name": "flow name",\n  "version": "version of flow",\n  "isActive": "is that version active",\n  "short description": "...",\n  "long description": "...",\n  "possible questions": "...",\n  "questions": []\n}`,
+            },
+          ],
         },
       ],
     };
@@ -355,27 +378,39 @@ ${xml}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "X-goog-api-key": "AIzaSyCvy9qo6DJhF5Ry9ecNGPjAuywh3ZyeGZE",
         },
         body: JSON.stringify(body),
       });
+
+      console.log("----------reponse: ", response);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
       }
 
       const data = await response.json();
-      const reply =
-        data.choices?.[0]?.message?.content || "No response from AI.";
 
-      let parsed;
       try {
-        parsed = JSON.parse(reply);
-        console.log("parsed", parsed);
+        // ✅ Extract text safely
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error("No candidates returned from Gemini API");
+        }
+
+        // ✅ Clean Markdown fences (```json ... ```)
+        const cleaned = rawText.replace(/```json\n?|\n?```/g, "");
+
+        // ✅ Parse JSON
+        const parsed = JSON.parse(cleaned);
+
+        // ✅ Retrieve descriptions
         shortSummary =
           parsed["short description"] || "Short summary not found.";
         longSummary = parsed["long description"] || "Long summary not found.";
       } catch (err) {
+        console.log("Error while parsing: ", err);
+        console.log("Data: ", data);
         shortSummary = "❌ Failed to parse short summary.";
         longSummary = "❌ Failed to parse long summary.";
       }

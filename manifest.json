@@ -3,7 +3,7 @@
   "name": "FloXplorer",
   "version": "1.0",
   "description": "Displays a helper panel only on Salesforce Flow Builder edit screen.",
-  "permissions": ["activeTab", "scripting", "cookies"],
+  "permissions": ["activeTab", "scripting", "cookies", "storage"],
   "host_permissions": [
     "*://*.lightning.force.com/*",
     "*://*.salesforce.com/*",
