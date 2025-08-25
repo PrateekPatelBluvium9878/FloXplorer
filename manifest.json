@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "FloXplorer",
+  "version": "1.0",
+  "description": "Displays a helper panel only on Salesforce Flow Builder edit screen.",
+  "permissions": ["activeTab", "scripting", "cookies"],
+  "host_permissions": [
+    "*://*.lightning.force.com/*",
+    "*://*.salesforce.com/*",
+    "https://api.perplexity.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.lightning.force.com/builder_platform_interaction/flowBuilder.app*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["Logo.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
